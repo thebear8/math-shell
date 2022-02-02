@@ -1,21 +1,22 @@
 import React from "react";
 import { parseMath } from "../../shell/math-parser.js";
-import { Context } from "../../shell/math-runtime.js";
+import { MathContext } from "../../shell/math-runtime.js";
 
 export default class Console extends React.Component {
-    input = null;
-    lineContainer = null;
-    mathContext = new Context((c) => this.onCommand(c));
-    inputHistory = [];
-    inputHistoryIdx = 0;
-
-    state = {
-        lines: [],
-    };
+    constructor() {
+        super();
+        this.input = null;
+        this.lineContainer = null;
+        this.inputHistory = [];
+        this.inputHistoryIdx = 0;
+        this.state = { lines: [] };
+        this.mathContext = new MathContext();
+        this.mathContext.values.clear = () => setTimeout(() => this.clear(), 0);
+    }
 
     render() {
         return (
-            <div className="d-flex flex-column container h-75 p-0 border border-dark rounded font-monospace">
+            <div className="d-flex flex-column container h-50 p-0 border border-dark rounded font-monospace">
                 <div className="flex-grow-1 overflow-auto" ref={(e) => this.lineContainer = e}>
                     {this.state.lines.map(this.makeLine)}
                 </div>
@@ -62,7 +63,7 @@ export default class Console extends React.Component {
             if (this.inputHistoryIdx < this.inputHistory.length - 1) {
                 this.input.value = this.inputHistory[++this.inputHistoryIdx];
             }
-        } else if(e.code === "Escape") {
+        } else if (e.code === "Escape") {
             e.preventDefault();
             this.input.value = "";
         }
@@ -72,48 +73,35 @@ export default class Console extends React.Component {
         if (e.key === "(") {
             this.input.setRangeText(")", this.input.selectionStart, this.input.selectionEnd, "start");
         }
-        if (e.key === "[") {
-            this.input.setRangeText("]", this.input.selectionStart, this.input.selectionEnd, "start");
-        }
-        if (e.key === "{") {
-            this.input.setRangeText("}", this.input.selectionStart, this.input.selectionEnd, "start");
-        }
-        if (e.key === "'") {
-            this.input.setRangeText("'", this.input.selectionStart, this.input.selectionEnd, "start");
-        }
-        if (e.key === '"') {
-            this.input.setRangeText('"', this.input.selectionStart, this.input.selectionEnd, "start");
-        }
     }
 
     onSubmit(e) {
         e.preventDefault();
         let input = this.input.value;
-        if (input.match(/(clear)/)) {
-            if (input === "clear") {
-                this.mathContext.reset();
-                this.setState({ lines: [] });
+        let ast = parseMath(input);
+        if (ast) {
+            try {
+                let result = this.mathContext.evaluate(ast[0]);
+                let value = this.mathContext.describe(result);
+                this.state.lines.push([input, value]);
+                this.setState(this.state);
                 this.input.value = "";
-            }
-        } else {
-            let ast = parseMath(input);
-            if (ast) {
-                try {
-                    let result = this.mathContext.evaluate(ast[0]);
-                    let value = this.mathContext.describe(result);
-                    this.state.lines.push([input, value]);
-                    this.setState(this.state);
-                    this.input.value = "";
-                    this.inputHistory.push(input);
-                    this.inputHistoryIdx = this.inputHistory.length;
-                } catch (e) {
-                    this.state.lines.push([input, e.toString()]);
-                    this.setState(this.state);
-                }
-            } else {
-                this.state.lines.push([input, "Syntax Error."]);
+                this.inputHistory.push(input);
+                this.inputHistoryIdx = this.inputHistory.length;
+            } catch (e) {
+                this.state.lines.push([input, e.toString()]);
                 this.setState(this.state);
             }
+        } else {
+            this.state.lines.push([input, "Syntax Error."]);
+            this.setState(this.state);
         }
+    }
+
+    clear() {
+        this.mathContext = new MathContext();
+        this.mathContext.values.clear = () => setTimeout(() => this.clear(), 0);
+        this.setState({ lines: [] });
+        this.input.value = "";
     }
 };

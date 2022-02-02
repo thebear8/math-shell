@@ -10,6 +10,15 @@ function __unaryPre(...stack) {
     return e;
 };
 
+function __unaryPost(...stack) {
+    let e = stack.shift();
+    while(stack.length) {
+        let operator = stack.shift();
+        e = new operator(e);
+    }
+    return e;
+};
+
 function __binaryLeft(...stack) {
     let left = stack.shift();
     while(stack.length) {
@@ -30,15 +39,14 @@ function __binaryRight(...stack) {
     return right;
 };
 
-const ConstantToken = Regex(/([0-9]+(\.[0-9]+)?)/);
-const Constant = AstNode(Ast.Constant, ConstantToken);
-const IdentifierToken = Regex(/([_a-zA-Z][_a-zA-Z0-9]*)/);
-const Identifier = AstNode(Ast.Identifier, IdentifierToken);
+const Identifier = Regex(/([_a-zA-Z][_a-zA-Z0-9]*)/);
 
 const Expression = Y((Expression) => {
     const GroupExpression = AstNode(Ast.GroupExpression, "(", Expression, ")");
-    const FunctionCall = AstNode(Ast.FunctionCall, IdentifierToken, "(", Group(Optional(Expression, Repetition(",", Expression))), ")");
-    const L0 = Any(FunctionCall, GroupExpression, Identifier, Constant);
+    const ConstantExpression = AstNode(Ast.ConstantExpression, /([0-9]+(\.[0-9]+)?)/);
+    const VariableExpression = AstNode(Ast.VariableExpression, Identifier);
+    const FunctionCall = AstNode(Ast.CallExpression, Identifier, "(", Group(Optional(Expression, Repetition(",", Expression))), ")");
+    const L0 = Any(FunctionCall, GroupExpression, ConstantExpression, VariableExpression);
 
     const Exponentiate = Reduce((e) => [Ast.Exponentiate, e], "^", L0);
     const L1 = Reduce(__binaryRight, L0, Repetition(Exponentiate));
@@ -61,8 +69,8 @@ const Expression = Y((Expression) => {
     return L5;
 });
 
-const AssignmentStatement = AstNode(Ast.AssignmentStatement, IdentifierToken, "=", Expression);
-const FunctionDefinitionStatement = AstNode(Ast.FunctionDefinitionStatement, IdentifierToken, "(", Group(Optional(IdentifierToken, Repetition(",", IdentifierToken))), ")", "=", Expression);
+const AssignmentStatement = AstNode(Ast.Assignment, Identifier, "=", Expression);
+const FunctionDefinitionStatement = AstNode(Ast.FunctionDefinition, Identifier, "(", Group(Optional(Identifier, Repetition(",", Identifier))), ")", "=", Expression);
 const Statement = Any(AssignmentStatement, FunctionDefinitionStatement, Expression);
 
 export const parseMath = Whitespace(/\s+/, Statement, EOF());

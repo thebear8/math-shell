@@ -1,100 +1,96 @@
-export class AstNode {
-    constructor() {
-        this.type = this.constructor.name;
-    }
+import { Add, Assignment, CallExpression, ConstantExpression, Divide, Exponentiate, FunctionDefinition, GroupExpression, Multiply, Negative, Positive, Subtract, VariableExpression } from "./math-ast";
 
-    execute(ctx, console) {
-        throw new Error("Not Implemented");
+function throwIf(condition, message) {
+    if(condition) {
+        console.log(`Runtime Error: ${message}`);
+        throw new Error(`Runtime Error: ${message}`);
     }
+}
 
-    evaluate(ctx) {
-        throw new Error("Not Implemented");
-    }
-
-    call(ctx, ...parameters) {
-        throw new Error("Not Implemented");
-    }
-
-    describe(ctx) {
-        throw new Error("Not Implemented");
-    }
-};
-
-export class Context {
-    variables = {};
-    functions = {};
-    scopes = [];
+export class MathContext {
+    values = {};
 
     constructor() {
-        this.reset();
+        Object.getOwnPropertyNames(Math).forEach((name) => {
+            if(typeof(Math[name]) == "function") {
+                this.values[name] = (ctx, args) => Math[name](...args.map((a) => ctx.evaluate(a)));
+            }
+        });
     }
 
-    reset() {
-        let mathValues = Object.getOwnPropertyNames(Math).map((n) => [n, Math[n]]);
-        this.variables = Object.fromEntries(mathValues.filter(([n, v]) => typeof(v) == "number"));
-        this.functions = Object.fromEntries(mathValues.filter(([n, v]) => typeof(v) == "function"));
-        this.scopes = [];
-    }
-
-    setVariable(name, value) {
-        return this.variables[name] = value;
-    }
-
-    setFunction(name, value) {
-        return this.functions[name] = value;
-    }
-
-    beginScope() {
-        this.scopes.push([this.variables, this.functions]);
-    }
-
-    endScope() {
-        [this.variables, this.functions] = this.scopes.pop();
-    }
-
-    execute(console, value) {
-
-    }
-
-    evaluate(value) {
-        if(typeof(value) == "number") {
-            return value;
-        } else if(value instanceof AstNode) {
-            return value.evaluate(this);
-        } else if(value in this.variables) {
-            return this.evaluate(this.variables[value]);
-        } else {
-            throw new Error("Undefined Value");
+    evaluate(node) {
+        if(node instanceof ConstantExpression) {
+            return Number.parseFloat(node.value);
+        } else if(node instanceof VariableExpression) {
+            throwIf(!(node.name in this.values), `${node.name} is not defined`);
+            return this.values[node.name];
+        } else if(node instanceof GroupExpression) {
+            return this.evaluate(node.expression);
+        } else if(node instanceof CallExpression) {
+            throwIf(!(node.name in this.values), `${node.name} is not defined`);
+            if(typeof(this.values[node.name]) == "function") {
+                return this.values[node.name](this, node.args);
+            } else if(this.values[node.name] instanceof FunctionDefinition) {
+                let parameters = this.values[node.name].parameters;
+                let expression = this.values[node.name].expression;
+                let scope = this.values;
+                this.values = Object.fromEntries([...Object.entries(this.values), ...parameters.map((k, i) => [k, this.evaluate(node.args[i])])]);
+                let result = this.evaluate(expression);
+                this.values = scope;
+                return result;
+            } else {
+                throwIf(true, `${node.name} is not a function`);
+            }
+        } else if(node instanceof Positive) {
+            return +this.evaluate(node.expression);
+        } else if(node instanceof Negative) {
+            return -this.evaluate(node.expression);
+        } else if(node instanceof Exponentiate) {
+            return this.evaluate(node.left) ** this.evaluate(node.right);
+        } else if(node instanceof Multiply) {
+            return this.evaluate(node.left) * this.evaluate(node.right);
+        } else if(node instanceof Divide) {
+            return this.evaluate(node.left) / this.evaluate(node.right);
+        } else if(node instanceof Add) {
+            return this.evaluate(node.left) + this.evaluate(node.right);
+        } else if(node instanceof Subtract) {
+            return this.evaluate(node.left) - this.evaluate(node.right);
+        } else if(node instanceof Assignment) {
+            return (this.values[node.name] = this.evaluate(node.expression));
+        } else if(node instanceof FunctionDefinition) {
+            return (this.values[node.name] = node);
         }
     }
 
-    call(value, ...parameters) {
-        if(typeof(value) == "function") {
-            return value(...parameters.map((p) => this.evaluate(p)));
-        } else if(value instanceof AstNode) {
-            return value.call(this, ...parameters.map((p) => this.evaluate(p)));
-        } else if(value in this.functions) {
-            return this.call(this.functions[value], ...parameters);
-        } else {
-            throw new Error("Undefined Function");
-        }
-    }
-
-    describe(value) {
-        if(typeof(value) == "number") {
-            return value.toString();
-        } else if(typeof(value) == "function") {
-            return value.toString();
-        } else if(value instanceof AstNode) {
-            return value.describe(this);
-        } else if(value in this.variables) {
-            return this.describe(this.variables[value]);
-        } else if(value in this.functions) {
-            return this.describe(this.functions[value]);
-        } else if(typeof(value) == "string") {
-            return value;
-        } else {
-            throw new Error("Undefined Object");
+    describe(node) {
+        if(typeof(node) == "number") {
+            return node.toString();
+        } else if(node instanceof ConstantExpression) {
+            return node.value;
+        } else if(node instanceof VariableExpression) {
+            return node.name;
+        } else if(node instanceof GroupExpression) {
+            return `(${this.describe(node.expression)})`;
+        } else if(node instanceof CallExpression) {
+            return `${node.name}(${node.args.map((a) => this.describe(a)).join(", ")})`;
+        } else if(node instanceof Positive) {
+            return `+${this.describe(node.expression)}`;
+        } else if(node instanceof Negative) {
+            return `-${this.describe(node.expression)}`;
+        } else if(node instanceof Exponentiate) {
+            return `${this.describe(node.left)} ^ ${this.describe(node.right)}`;
+        } else if(node instanceof Multiply) {
+            return `${this.describe(node.left)} * ${this.describe(node.right)}`;
+        } else if(node instanceof Divide) {
+            return `${this.describe(node.left)} / ${this.describe(node.right)}`;
+        } else if(node instanceof Add) {
+            return `${this.describe(node.left)} + ${this.describe(node.right)}`;
+        } else if(node instanceof Subtract) {
+            return `${this.describe(node.left)} - ${this.describe(node.right)}`;
+        } else if(node instanceof Assignment) {
+            return `${this.describe(node.name)} = ${this.describe(node.expression)}`;
+        } else if(node instanceof FunctionDefinition) {
+            return `${node.name}(${node.parameters.join(", ")}) = ${this.describe(node.expression)}`;
         }
     }
 };
