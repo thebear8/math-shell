@@ -1,9 +1,33 @@
-expression = identifier "(" (expression ("," expression)*)? ")" "=>" sum_expression | identifier "=" sum_expression | sum_expression;
-sum_expression = factor_expression ("+" | "-") factor_expression | factor_expression;
-factor_expression = sign_expression ("*" | "/" | "%") sign_exprsesion | sign_expression;
-sign_expression = ("+" | "-") exponentiation_expression | exponentiation_expression;
-exponentiation_expression = primary_expression "^" primary_expression | primary_expression;
-primary_expression = identifier "(" (expression ("," expression)*)? ")" | "(" expression ")" | constant | identifier;
+constant = /([0-9]+([.][0-9]+)?)/;
+identifier = /([_a-zA-Z][_a-zA-Z0-9]*)/;
 
-constant = /[+-]?[0-9]+(\.[0-9]+)?/;
-identifier = /[_a-zA-Z][_a-zA-Z0-9]*/;
+argument_list = 
+	[ expression { "," expression } ];
+parameter_list = 
+	[ identifier { "," identifier } ];
+function_call = 
+	identifier "(" argument_list ")";
+grouping = 
+	"(" expression ")";
+
+primary_expression = 
+	function_call | grouping | constant | identifier;
+exponentiation_expression = 
+	primary_expression { "^" primary_expression };
+sign_expression = 
+	[ "+" | "-" ] exponentiation_expression;
+factor_expression = 
+	sign_expression { ("*" | "/" | "%") sign_expression };
+sum_expression = 
+	factor_expression { ("+" | "-") sum_expression };
+expression = 
+	sum_expression;
+
+assignment = 
+	identifier "=" expression;
+function_definition = 
+	identifier "(" parameter_list ")" "=" expression;
+statement = 
+	assignment | function_definition | expression;
+START =
+	statement;
